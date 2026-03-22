@@ -1,7 +1,6 @@
 ﻿using Terraria;
 using TShockAPI;
 using System.Text;
-using System.Reflection;
 using Terraria.ID;
 using Terraria.Utilities;
 using Microsoft.Xna.Framework;
@@ -938,56 +937,6 @@ internal class Utils
     {
         var unlockState = Main.BestiaryDB.FindEntryByNPCID(type).UIInfoProvider.GetEntryUICollectionInfo().UnlockState;
         return unlockState == Terraria.GameContent.Bestiary.BestiaryEntryUnlockState.CanShowDropsWithDropRates_4;
-    }
-    #endregion
-
-    #region 无权限执行命令
-    public static bool InvokeCmd(TSPlayer plr, string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return false;
-
-        string cmdText = text.Remove(0, 1); // 去掉开头的 /
-        MethodInfo method = typeof(Commands).GetMethod("ParseParameters", BindingFlags.NonPublic | BindingFlags.Static)!;
-        if (method == null)
-            return false;
-
-        var args = (List<string>)method.Invoke(null, [cmdText])!;
-        if (args == null || args.Count < 1)
-            return false;
-
-        string cmdName = args[0].ToLower();
-        args.RemoveAt(0);
-
-        var cmds = Commands.ChatCommands.Where(c => c.HasAlias(cmdName)).ToList();
-        if (cmds.Count == 0)
-        {
-            if (plr.AwaitingResponse.ContainsKey(cmdName))
-            {
-                Action<object> action = plr.AwaitingResponse[cmdName];
-                plr.AwaitingResponse.Remove(cmdName);
-                action(new CommandArgs(cmdText, plr, args));
-                return true;
-            }
-            plr.SendErrorMessage("输入的命令无效。请输入 /help 以获取有效命令列表");
-            return true;
-        }
-
-        foreach (Command cmd in cmds)
-        {
-            if (!cmd.AllowServer && !plr.RealPlayer)
-            {
-                plr.SendErrorMessage("你必须在游戏中使用这个命令");
-                continue;
-            }
-            if (cmd.DoLog)
-            {
-                TShock.Utils.SendLogs(plr.Name + " 执行: /" + cmdText + ".", Color.Red);
-            }
-
-            cmd.CommandDelegate(new CommandArgs(cmdText, plr, args));
-        }
-        return true;
     }
     #endregion
 }

@@ -1,6 +1,8 @@
-﻿using System.Text;
+﻿using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using Terraria;
+using Microsoft.Xna.Framework;
 using TerrariaApi.Server;
 using TShockAPI;
 using TShockAPI.Hooks;
@@ -16,7 +18,7 @@ public class Plugin(Main game) : TerrariaPlugin(game)
     public static string PluginName => "命令别名";
     public override string Name => PluginName;
     public override string Author => "羽学";
-    public override Version Version => new(1, 0, 0);
+    public override Version Version => new(1, 0, 1);
     public override string Description => "自定义命令别名的列表，支持冷却、条件、补充参数等。";
     #endregion
 
@@ -230,12 +232,12 @@ public class Plugin(Main game) : TerrariaPlugin(game)
     #region 执行别名命令（含标记替换、参数补充）
     private bool DoCommands(AliasCommand data, TSPlayer plr, List<string> parm)
     {
-        bool anyExecuted = false;
+        bool yes = false;
 
         foreach (string raw in data.Commands)
         {
             string cmd = raw;
-            bool flag = true; // 是否要执行（$msg 会设为 false）
+            bool NoMess = true; // 是否要执行（$msg 会设为 false）
 
             // 替换参数 $1, $2- 等
             RepMarkers(parm, ref cmd);
@@ -291,7 +293,7 @@ public class Plugin(Main game) : TerrariaPlugin(game)
                     var target = TShock.Players.FirstOrDefault(p => p?.Name == targetName);
                     if (target != null)
                     {
-                        flag = false; // 不执行命令，只发送消息
+                        NoMess = false; // 不执行命令，只发送消息
                         target.SendInfoMessage(msg);
                     }
                 }
@@ -310,10 +312,10 @@ public class Plugin(Main game) : TerrariaPlugin(game)
                 if (firstWord.StartsWith("/") && firstWord.Substring(1).Equals(data.Alias, StringComparison.CurrentCultureIgnoreCase))
                     continue;
 
-                if (flag)
+                if (NoMess)
                 {
-                    InvokeCmd(plr, cmd);
-                    anyExecuted = true;
+                    InvokeCmd(plr, cmd, data.SetAdmin);
+                    yes = true;
                 }
             }
             catch
@@ -322,7 +324,7 @@ public class Plugin(Main game) : TerrariaPlugin(game)
             }
         }
 
-        return anyExecuted;
+        return yes;
     }
     #endregion
 
@@ -367,6 +369,73 @@ public class Plugin(Main game) : TerrariaPlugin(game)
                 }
             }
         }
+    }
+    #endregion
+
+    #region 无权限执行命令
+    public static bool InvokeCmd(TSPlayer plr, string text, bool setAdmin)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        string cmdText = text.Remove(0, 1); // 去掉开头的 /
+        MethodInfo method = typeof(Commands).GetMethod("ParseParameters", BindingFlags.NonPublic | BindingFlags.Static)!;
+        if (method == null)
+            return false;
+
+        var args = (List<string>)method.Invoke(null, [cmdText])!;
+        if (args == null || args.Count < 1)
+            return false;
+
+        string cmdName = args[0].ToLower();
+        args.RemoveAt(0);
+
+        var cmds = Commands.ChatCommands.Where(c => c.HasAlias(cmdName)).ToList();
+        if (cmds.Count == 0)
+        {
+            if (plr.AwaitingResponse.ContainsKey(cmdName))
+            {
+                Action<object> action = plr.AwaitingResponse[cmdName];
+                plr.AwaitingResponse.Remove(cmdName);
+                action(new CommandArgs(cmdText, plr, args));
+                return true;
+            }
+            plr.SendErrorMessage("输入的命令无效。请输入 /help 以获取有效命令列表");
+            return true;
+        }
+
+        foreach (Command cmd in cmds)
+        {
+            if (!cmd.AllowServer && !plr.RealPlayer)
+            {
+                plr.SendErrorMessage("你必须在游戏中使用这个命令");
+                continue;
+            }
+
+            if (cmd.DoLog)
+            {
+                TShock.Utils.SendLogs(plr.Name + " 执行: /" + cmdText + ".", Color.Red);
+            }
+
+            if (setAdmin)
+            {
+                var group = plr.Group;
+                try
+                {
+                    plr.Group = new SuperAdminGroup();
+                    cmd.CommandDelegate(new CommandArgs(cmdText, plr, args));
+                }
+                finally
+                {
+                    plr.Group = group;
+                }
+            }
+            else
+            {
+                cmd.CommandDelegate(new CommandArgs(cmdText, plr, args));
+            }
+        }
+        return true;
     }
     #endregion
 }

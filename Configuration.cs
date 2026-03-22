@@ -30,6 +30,8 @@ internal class Configuration
         public List<string> Commands { get; set; } = new();
         [JsonProperty("权限")]
         public string Perms { get; set; } = "";
+        [JsonProperty("越权执行")]
+        public bool SetAdmin { get; set; } = false;
         [JsonProperty("帮助文本")]
         public string Help { get; set; } = "";
 
@@ -43,9 +45,10 @@ internal class Configuration
         public bool Supplement { get; set; } = false;
         [JsonProperty("阻止原始")]
         public bool NotSource { get; set; } = false;
-        public static AliasCommand Create(string alias, string perms, string help, params string[] cmds)
+
+        public static AliasCommand Create(string alias, string perms, string help, bool setAdmin, params string[] cmds)
         {
-            return new AliasCommand { Alias = alias, Perms = perms, Help = help, Commands = cmds.ToList() };
+            return new AliasCommand { Alias = alias, Perms = perms, Help = help, Commands = cmds.ToList(), SetAdmin = setAdmin};
         }
     }
     #endregion
@@ -69,7 +72,8 @@ internal class Configuration
         "【配置项说明】",
         "别名 —— 玩家输入的命令名称",
         "执行命令 —— 实际执行的命令列表，可包含多条，支持上述占位符",
-        "权限 —— （留空则所有人可用）",
+        "权限 —— 留空则所有人可用",
+        "越权执行 —— true 为玩家越权执行特殊指令,例如Economics系列指令",
         "帮助文本 —— 当命令执行失败时显示的提示信息",
         "冷却秒数 —— 使用后需要等待的秒数（0为无冷却）",
         "共享冷却 —— true 时所有玩家共享冷却，false 时每个玩家独立冷却",
@@ -79,12 +83,13 @@ internal class Configuration
          "——————————",
         "输入 /reload 即可重新加载配置文件"};
 
-        Aliases.Add(AliasCommand.Create("升级抽奖", string.Empty, string.Empty,
+        Aliases.Add(AliasCommand.Create("升级抽奖", string.Empty, string.Empty,true,
            "/give $random(1,5452) $name $random(1,11) $random(1,84)",
            "/give $random(1,5452) $name $random(1,11) $random(1,84)",
            "/give $random(1,5452) $name $random(1,11) $random(1,84)",
            "/give $random(1,5452) $name $random(1,11) $random(1,84)",
            "/give $random(1,5452) $name $random(1,11) $random(1,84)",
+           "/bank deduct $name 10 魂力",
            "/me [c/8A2BE2:升级抽奖~会有什么呢][i:$random(1,5452)]"));
     }
     #endregion
